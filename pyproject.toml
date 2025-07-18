@@ -1,0 +1,27 @@
+[project]
+name = "media-seal"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.16.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+select = ["E", "F", "W", "C", "I", "N", "UP", "B", "A"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+known-first-party = ["media_seal"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.4",
+]
