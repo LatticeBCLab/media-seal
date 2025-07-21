@@ -99,7 +99,6 @@ scipy>=1.9.0,<1.12.0
 numba>=0.58.0,<0.60.0
 
 # 水印库
-blind-watermark>=0.2.1
 PyWavelets>=1.3.0
 
 # 音频处理（可能需要降级）

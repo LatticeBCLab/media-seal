@@ -22,7 +22,7 @@
 - **GitHub**: https://github.com/ShieldMnt/invisible-watermark
 - **PyPI**: `pip install invisible-watermark`
 - **特点**：
-  - 支持多种算法：DWT+DCT、DWT+DCT+SVD、RivaGAN
+  - 支持多种算法：DWT+DCT、DWT+DCT+SVD
   - 不可见盲水印，无需原图即可提取
   - 支持命令行和API接口
   - 对噪声、亮度、JPEG压缩有很好的鲁棒性
@@ -97,7 +97,7 @@ bwm1.extract(filename='output/embedded.png', wm_shape=(128, 128),
 - **特点**：
   - 支持图像和视频水印
   - 即插即用框架，无需额外训练
-  - 比RivaGAN快约40倍
+  - 快速处理，高效的水印嵌入和提取
   - 提供可证明的假阳性率保证
   - 支持任意长度视频和可调水印强度
 
@@ -239,7 +239,6 @@ jobs:
 | 库/方法 | 嵌入速度 | 提取速度 | 鲁棒性 | 容量 | 推荐度 |
 |---------|----------|----------|--------|------|--------|
 | invisible-watermark (dwtDct) | 快 | 快 | 中等 | 中等 | ⭐⭐⭐⭐⭐ |
-| invisible-watermark (rivaGan) | 慢 | 慢 | 高 | 低 | ⭐⭐⭐⭐ |
 | blind-watermark | 中等 | 中等 | 高 | 中等 | ⭐⭐⭐⭐ |
 | VideoSeal | 快 | 快 | 很高 | 高 | ⭐⭐⭐⭐⭐ |
 | RAWatermark | 很快 | 很快 | 高 | 中等 | ⭐⭐⭐⭐ |

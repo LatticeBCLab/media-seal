@@ -6,7 +6,7 @@
 
 #### 1. 数字水印核心功能
 - **图像水印** ✅
-  - 支持 invisible-watermark 库（dwtDct, dwtDctSvd, rivaGan）
+  - 支持 invisible-watermark 库（dwtDct, dwtDctSvd）
   - 支持 blind-watermark 库（盲水印）
   - 支持文字和图像水印
   - 支持批量处理
@@ -76,7 +76,6 @@ media-seal/
 #### 1. 图像水印技术
 - **DWT+DCT域水印**：平衡性能和鲁棒性
 - **DWT+DCT+SVD域水印**：增强鲁棒性
-- **RivaGAN深度学习**：最佳质量但速度较慢
 - **盲水印技术**：支持无需原图提取
 
 #### 2. 音频水印技术
@@ -97,7 +96,6 @@ media-seal/
 |------|------|--------|------|----------|
 | 图像 | dwtDct | ⭐⭐⭐ | ⭐⭐⭐⭐ | 一般保护 |
 | 图像 | dwtDctSvd | ⭐⭐⭐⭐ | ⭐⭐⭐ | 重要内容 |
-| 图像 | rivaGan | ⭐⭐⭐⭐⭐ | ⭐⭐ | 高质量需求 |
 | 图像 | blind | ⭐⭐⭐⭐ | ⭐⭐⭐ | 隐蔽性要求 |
 | 音频 | dct | ⭐⭐⭐ | ⭐⭐⭐⭐ | 通用音频 |
 | 音频 | dwt | ⭐⭐⭐⭐ | ⭐⭐⭐ | 高质量音频 |

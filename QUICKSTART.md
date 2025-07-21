@@ -112,7 +112,6 @@ python main.py video extract-frames video.mp4 frames_output/ --interval 30 --max
 |------|------|----------|--------|------|
 | `dwtDct` | DWT+DCT域，平衡性能 | 一般图像保护 | ⭐⭐⭐ | ⭐⭐⭐⭐ |
 | `dwtDctSvd` | 添加SVD，更鲁棒 | 重要图像保护 | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| `rivaGan` | 深度学习方法 | 高质量需求 | ⭐⭐⭐⭐⭐ | ⭐⭐ |
 | `blind` | 盲水印，支持图像水印 | 隐蔽性要求高 | ⭐⭐⭐⭐ | ⭐⭐⭐ |
 
 ### 音频水印算法

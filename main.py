@@ -45,17 +45,17 @@ def image_embed(
     output_path: Path = typer.Argument(..., help="输出图片路径"),
     watermark: str = typer.Argument(..., help="水印内容"),
     method: str = typer.Option(
-        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd, rivaGan, blind"
+        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码（blind方法）"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码（blind方法）"),
+    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
+    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
 ):
     """嵌入图像水印"""
     if not WATERMARK_AVAILABLE:
         console.print("[red]错误：水印模块不可用，请安装必要的依赖[/red]")
         raise typer.Exit(1)
 
-    if method not in ["dwtDct", "dwtDctSvd", "rivaGan", "blind"]:
+    if method not in ["dwtDct", "dwtDctSvd"]:
         console.print(f"[red]错误：不支持的方法: {method}[/red]")
         raise typer.Exit(1)
 
@@ -71,15 +71,15 @@ def image_embed(
 def image_extract(
     input_path: Path = typer.Argument(..., help="输入图片路径"),
     method: str = typer.Option(
-        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd, rivaGan, blind"
+        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码（blind方法）"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码（blind方法）"),
+    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
+    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     wm_shape: str | None = typer.Option(
-        None, "--wm-shape", help="水印形状（如：128,128，用于blind方法提取图像水印）"
+        None, "--wm-shape", help="水印形状（如：128,128）"
     ),
     output_wm_path: Path | None = typer.Option(
-        None, "--output-wm", help="输出水印路径（用于blind方法提取图像水印）"
+        None, "--output-wm", help="输出水印路径"
     ),
 ):
     """提取图像水印"""
@@ -111,10 +111,10 @@ def image_batch_embed(
     output_dir: Path = typer.Argument(..., help="输出目录"),
     watermark: str = typer.Argument(..., help="水印内容"),
     method: str = typer.Option(
-        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd, rivaGan, blind"
+        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码（blind方法）"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码（blind方法）"),
+    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
+    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
 ):
     """批量嵌入图像水印"""
     if not WATERMARK_AVAILABLE:
@@ -215,10 +215,10 @@ def video_embed(
     output_path: Path = typer.Argument(..., help="输出视频路径"),
     watermark: str = typer.Argument(..., help="水印内容"),
     method: str = typer.Option(
-        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd, rivaGan, blind"
+        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码（blind方法）"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码（blind方法）"),
+    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
+    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     frame_interval: int = typer.Option(
         1, "--frame-interval", help="帧间隔（每隔多少帧嵌入一次）"
     ),
@@ -250,10 +250,10 @@ def video_embed(
 def video_extract(
     input_path: Path = typer.Argument(..., help="输入视频路径"),
     method: str = typer.Option(
-        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd, rivaGan, blind"
+        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码（blind方法）"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码（blind方法）"),
+    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
+    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     frame_interval: int = typer.Option(1, "--frame-interval", help="帧间隔"),
     sample_frames: int = typer.Option(10, "--sample-frames", help="采样帧数"),
     wm_shape: str | None = typer.Option(
@@ -345,10 +345,10 @@ def video_batch_embed(
     output_dir: Path = typer.Argument(..., help="输出目录"),
     watermark: str = typer.Argument(..., help="水印内容"),
     method: str = typer.Option(
-        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd, rivaGan, blind"
+        "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码（blind方法）"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码（blind方法）"),
+    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
+    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     frame_interval: int = typer.Option(1, "--frame-interval", help="帧间隔"),
 ):
     """批量嵌入视频水印"""
@@ -369,6 +369,7 @@ def video_batch_embed(
     if success_count == 0:
         raise typer.Exit(1)
 
+
 # 通用命令
 @app.command("version")
 def version():
@@ -377,7 +378,7 @@ def version():
     rprint("[green]版本: 0.1.0[/green]")
     rprint("[yellow]支持格式:[/yellow]")
     rprint("  - 图像: .jpg, .jpeg, .png, .bmp, .tiff")
-    rprint("  - 音频: .wav, .mp3, .flac, .ogg, .m4a")
+    rprint("  - 音频: .wav, .flac, .ogg (无需外部依赖)")
     rprint("  - 视频: .mp4, .avi, .mov, .mkv, .flv, .wmv")
 
     if WATERMARK_AVAILABLE:
@@ -400,8 +401,6 @@ def help_algorithms():
 
     image_table.add_row("dwtDct", "DWT+DCT域水印", "中等", "快")
     image_table.add_row("dwtDctSvd", "DWT+DCT+SVD域水印", "高", "中等")
-    image_table.add_row("rivaGan", "基于深度学习的水印", "很高", "慢")
-    image_table.add_row("blind", "盲水印（DWT+DCT+SVD）", "高", "中等")
 
     console.print(image_table)
 

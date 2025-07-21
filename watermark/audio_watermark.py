@@ -3,34 +3,35 @@
 基于DCT和DWT频域变换实现音频水印
 """
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Literal
 
 import librosa
 import numpy as np
-from pydub import AudioSegment
+import soundfile as sf
 from rich.console import Console
 from rich.progress import track
 from scipy.fft import dct, idct
 
 try:
     import pywt
+
     PYWT_AVAILABLE = True
 except ImportError:
     PYWT_AVAILABLE = False
 
 console = Console()
 
+
 class AudioWatermark:
     """音频数字水印处理类"""
 
     def __init__(self):
-        self.supported_formats = ['.wav', '.mp3', '.flac', '.ogg', '.m4a']
+        # 只支持soundfile原生支持的格式，不需要ffmpeg
+        self.supported_formats = [".wav", ".flac", ".ogg"]
         self.sample_rate = 22050  # 默认采样率
         self.frame_length = 2048  # 帧长度
-        self.hop_length = 512     # 跳跃长度
+        self.hop_length = 512  # 跳跃长度
 
     def embed(
         self,
@@ -39,11 +40,11 @@ class AudioWatermark:
         watermark: str,
         method: Literal["dct", "dwt", "spectrogram"] = "dct",
         alpha: float = 0.1,
-        password: int = 42
+        password: int = 42,
     ) -> bool:
         """
         嵌入音频水印
-        
+
         Args:
             input_path: 输入音频路径
             output_path: 输出音频路径
@@ -51,7 +52,7 @@ class AudioWatermark:
             method: 水印算法 (dct, dwt, spectrogram)
             alpha: 水印强度
             password: 用于生成伪随机序列的种子
-            
+
         Returns:
             bool: 是否成功
         """
@@ -65,6 +66,9 @@ class AudioWatermark:
 
             if input_path.suffix.lower() not in self.supported_formats:
                 console.print(f"[red]错误：不支持的音频格式: {input_path.suffix}[/red]")
+                console.print(
+                    f"[yellow]支持的格式: {', '.join(self.supported_formats)}[/yellow]"
+                )
                 return False
 
             # 创建输出目录
@@ -78,11 +82,17 @@ class AudioWatermark:
 
             # 根据方法嵌入水印
             if method == "dct":
-                watermarked_audio = self._embed_dct_watermark(y, watermark_binary, alpha, password)
+                watermarked_audio = self._embed_dct_watermark(
+                    y, watermark_binary, alpha, password
+                )
             elif method == "dwt":
-                watermarked_audio = self._embed_dwt_watermark(y, watermark_binary, alpha, password)
+                watermarked_audio = self._embed_dwt_watermark(
+                    y, watermark_binary, alpha, password
+                )
             elif method == "spectrogram":
-                watermarked_audio = self._embed_spectrogram_watermark(y, watermark_binary, alpha, password)
+                watermarked_audio = self._embed_spectrogram_watermark(
+                    y, watermark_binary, alpha, password
+                )
             else:
                 console.print(f"[red]错误：不支持的水印方法: {method}[/red]")
                 return False
@@ -101,17 +111,17 @@ class AudioWatermark:
         input_path: str | Path,
         method: Literal["dct", "dwt", "spectrogram"] = "dct",
         watermark_length: int = 32,
-        password: int = 42
+        password: int = 42,
     ) -> str | None:
         """
         提取音频水印
-        
+
         Args:
             input_path: 输入音频路径
             method: 水印算法
             watermark_length: 水印长度（字符数）
             password: 用于生成伪随机序列的种子
-            
+
         Returns:
             str: 提取的水印内容
         """
@@ -127,11 +137,17 @@ class AudioWatermark:
 
             # 根据方法提取水印
             if method == "dct":
-                watermark_binary = self._extract_dct_watermark(y, watermark_length * 8, password)
+                watermark_binary = self._extract_dct_watermark(
+                    y, watermark_length * 8, password
+                )
             elif method == "dwt":
-                watermark_binary = self._extract_dwt_watermark(y, watermark_length * 8, password)
+                watermark_binary = self._extract_dwt_watermark(
+                    y, watermark_length * 8, password
+                )
             elif method == "spectrogram":
-                watermark_binary = self._extract_spectrogram_watermark(y, watermark_length * 8, password)
+                watermark_binary = self._extract_spectrogram_watermark(
+                    y, watermark_length * 8, password
+                )
             else:
                 console.print(f"[red]错误：不支持的水印方法: {method}[/red]")
                 return None
@@ -147,30 +163,34 @@ class AudioWatermark:
 
     def _string_to_binary(self, text: str) -> np.ndarray:
         """将字符串转换为二进制数组"""
-        binary_str = ''.join(format(ord(char), '08b') for char in text)
+        binary_str = "".join(format(ord(char), "08b") for char in text)
         return np.array([int(bit) for bit in binary_str])
 
     def _binary_to_string(self, binary: np.ndarray) -> str:
         """将二进制数组转换为字符串"""
-        binary_str = ''.join(str(int(bit)) for bit in binary)
+        binary_str = "".join(str(int(bit)) for bit in binary)
         # 确保长度是8的倍数
-        binary_str = binary_str[:len(binary_str) - len(binary_str) % 8]
+        binary_str = binary_str[: len(binary_str) - len(binary_str) % 8]
         chars = []
         for i in range(0, len(binary_str), 8):
-            byte = binary_str[i:i+8]
+            byte = binary_str[i : i + 8]
             if len(byte) == 8:
                 chars.append(chr(int(byte, 2)))
-        return ''.join(chars)
+        return "".join(chars)
 
     def _generate_pseudorandom_sequence(self, length: int, seed: int) -> np.ndarray:
         """生成伪随机序列"""
         np.random.seed(seed)
         return np.random.randn(length)
 
-    def _embed_dct_watermark(self, audio: np.ndarray, watermark: np.ndarray, alpha: float, password: int) -> np.ndarray:
+    def _embed_dct_watermark(
+        self, audio: np.ndarray, watermark: np.ndarray, alpha: float, password: int
+    ) -> np.ndarray:
         """使用DCT域嵌入水印"""
         # 分帧处理
-        frames = librosa.util.frame(audio, frame_length=self.frame_length, hop_length=self.hop_length)
+        frames = librosa.util.frame(
+            audio, frame_length=self.frame_length, hop_length=self.hop_length
+        )
         watermarked_frames = frames.copy()
 
         # 生成伪随机序列
@@ -189,13 +209,20 @@ class AudioWatermark:
             mid_freq_start = len(dct_coeffs) // 4
             mid_freq_end = 3 * len(dct_coeffs) // 4
 
-            for j in range(mid_freq_start, min(mid_freq_end, mid_freq_start + len(watermark) - watermark_idx)):
+            for j in range(
+                mid_freq_start,
+                min(mid_freq_end, mid_freq_start + len(watermark) - watermark_idx),
+            ):
                 if watermark_idx < len(watermark):
                     # 使用扩频技术嵌入水印
                     if watermark[watermark_idx] == 1:
-                        dct_coeffs[j] += alpha * abs(dct_coeffs[j]) * pn_sequence[watermark_idx]
+                        dct_coeffs[j] += (
+                            alpha * abs(dct_coeffs[j]) * pn_sequence[watermark_idx]
+                        )
                     else:
-                        dct_coeffs[j] -= alpha * abs(dct_coeffs[j]) * pn_sequence[watermark_idx]
+                        dct_coeffs[j] -= (
+                            alpha * abs(dct_coeffs[j]) * pn_sequence[watermark_idx]
+                        )
                     watermark_idx += 1
 
             watermarked_frames[:, i] = idct(dct_coeffs)
@@ -208,14 +235,20 @@ class AudioWatermark:
             if end <= len(watermarked_audio):
                 watermarked_audio[start:end] += watermarked_frames[:, i]
             else:
-                watermarked_audio[start:] += watermarked_frames[:len(watermarked_audio)-start, i]
+                watermarked_audio[start:] += watermarked_frames[
+                    : len(watermarked_audio) - start, i
+                ]
 
         return watermarked_audio
 
-    def _extract_dct_watermark(self, audio: np.ndarray, watermark_length: int, password: int) -> np.ndarray:
+    def _extract_dct_watermark(
+        self, audio: np.ndarray, watermark_length: int, password: int
+    ) -> np.ndarray:
         """从DCT域提取水印"""
         # 分帧处理
-        frames = librosa.util.frame(audio, frame_length=self.frame_length, hop_length=self.hop_length)
+        frames = librosa.util.frame(
+            audio, frame_length=self.frame_length, hop_length=self.hop_length
+        )
 
         # 生成伪随机序列
         pn_sequence = self._generate_pseudorandom_sequence(watermark_length, password)
@@ -234,7 +267,10 @@ class AudioWatermark:
             mid_freq_start = len(dct_coeffs) // 4
             mid_freq_end = 3 * len(dct_coeffs) // 4
 
-            for j in range(mid_freq_start, min(mid_freq_end, mid_freq_start + watermark_length - watermark_idx)):
+            for j in range(
+                mid_freq_start,
+                min(mid_freq_end, mid_freq_start + watermark_length - watermark_idx),
+            ):
                 if watermark_idx < watermark_length:
                     # 使用相关检测提取水印
                     correlation = dct_coeffs[j] * pn_sequence[watermark_idx]
@@ -243,14 +279,16 @@ class AudioWatermark:
 
         return extracted_watermark
 
-    def _embed_dwt_watermark(self, audio: np.ndarray, watermark: np.ndarray, alpha: float, password: int) -> np.ndarray:
+    def _embed_dwt_watermark(
+        self, audio: np.ndarray, watermark: np.ndarray, alpha: float, password: int
+    ) -> np.ndarray:
         """使用DWT域嵌入水印"""
         if not PYWT_AVAILABLE:
             console.print("[yellow]警告：PyWavelets未安装，使用DCT方法[/yellow]")
             return self._embed_dct_watermark(audio, watermark, alpha, password)
 
         # 小波变换
-        coeffs = pywt.wavedec(audio, 'db4', level=4)
+        coeffs = pywt.wavedec(audio, "db4", level=4)
 
         # 在详细系数中嵌入水印
         detail_coeffs = coeffs[1]  # 第一层详细系数
@@ -266,24 +304,28 @@ class AudioWatermark:
         coeffs[1] = detail_coeffs
 
         # 逆小波变换
-        watermarked_audio = pywt.waverec(coeffs, 'db4')
+        watermarked_audio = pywt.waverec(coeffs, "db4")
 
         # 确保长度一致
         if len(watermarked_audio) > len(audio):
-            watermarked_audio = watermarked_audio[:len(audio)]
+            watermarked_audio = watermarked_audio[: len(audio)]
         elif len(watermarked_audio) < len(audio):
-            watermarked_audio = np.pad(watermarked_audio, (0, len(audio) - len(watermarked_audio)))
+            watermarked_audio = np.pad(
+                watermarked_audio, (0, len(audio) - len(watermarked_audio))
+            )
 
         return watermarked_audio
 
-    def _extract_dwt_watermark(self, audio: np.ndarray, watermark_length: int, password: int) -> np.ndarray:
+    def _extract_dwt_watermark(
+        self, audio: np.ndarray, watermark_length: int, password: int
+    ) -> np.ndarray:
         """从DWT域提取水印"""
         if not PYWT_AVAILABLE:
             console.print("[yellow]警告：PyWavelets未安装，使用DCT方法[/yellow]")
             return self._extract_dct_watermark(audio, watermark_length, password)
 
         # 小波变换
-        coeffs = pywt.wavedec(audio, 'db4', level=4)
+        coeffs = pywt.wavedec(audio, "db4", level=4)
         detail_coeffs = coeffs[1]
 
         # 生成伪随机序列
@@ -297,7 +339,9 @@ class AudioWatermark:
 
         return extracted_watermark
 
-    def _embed_spectrogram_watermark(self, audio: np.ndarray, watermark: np.ndarray, alpha: float, password: int) -> np.ndarray:
+    def _embed_spectrogram_watermark(
+        self, audio: np.ndarray, watermark: np.ndarray, alpha: float, password: int
+    ) -> np.ndarray:
         """使用频谱图嵌入水印"""
         # 计算短时傅里叶变换
         stft = librosa.stft(audio, n_fft=self.frame_length, hop_length=self.hop_length)
@@ -316,12 +360,14 @@ class AudioWatermark:
             freq_start = magnitude.shape[0] // 4
             freq_end = 3 * magnitude.shape[0] // 4
 
-            for f in range(freq_start, min(freq_end, freq_start + len(watermark) - watermark_idx)):
+            for f in range(
+                freq_start, min(freq_end, freq_start + len(watermark) - watermark_idx)
+            ):
                 if watermark_idx < len(watermark):
                     if watermark[watermark_idx] == 1:
-                        magnitude[f, t] *= (1 + alpha * pn_sequence[watermark_idx])
+                        magnitude[f, t] *= 1 + alpha * pn_sequence[watermark_idx]
                     else:
-                        magnitude[f, t] *= (1 - alpha * pn_sequence[watermark_idx])
+                        magnitude[f, t] *= 1 - alpha * pn_sequence[watermark_idx]
                     watermark_idx += 1
 
         # 重构音频
@@ -330,7 +376,9 @@ class AudioWatermark:
 
         return watermarked_audio
 
-    def _extract_spectrogram_watermark(self, audio: np.ndarray, watermark_length: int, password: int) -> np.ndarray:
+    def _extract_spectrogram_watermark(
+        self, audio: np.ndarray, watermark_length: int, password: int
+    ) -> np.ndarray:
         """从频谱图提取水印"""
         # 计算短时傅里叶变换
         stft = librosa.stft(audio, n_fft=self.frame_length, hop_length=self.hop_length)
@@ -349,47 +397,31 @@ class AudioWatermark:
             freq_start = magnitude.shape[0] // 4
             freq_end = 3 * magnitude.shape[0] // 4
 
-            for f in range(freq_start, min(freq_end, freq_start + watermark_length - watermark_idx)):
+            for f in range(
+                freq_start, min(freq_end, freq_start + watermark_length - watermark_idx)
+            ):
                 if watermark_idx < watermark_length:
                     # 使用相关检测
                     correlation = magnitude[f, t] * pn_sequence[watermark_idx]
-                    extracted_watermark[watermark_idx] = 1 if correlation > np.mean(magnitude[f, :]) else 0
+                    extracted_watermark[watermark_idx] = (
+                        1 if correlation > np.mean(magnitude[f, :]) else 0
+                    )
                     watermark_idx += 1
 
         return extracted_watermark
 
     def _save_audio(self, audio: np.ndarray, output_path: Path, sample_rate: int):
-        """保存音频文件"""
-        # 首先保存为WAV格式
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-            import soundfile as sf
-            sf.write(tmp_file.name, audio, sample_rate)
-            tmp_path = tmp_file.name
-
+        """保存音频文件（使用soundfile，无需外部依赖）"""
         try:
-            # 如果输出格式不是WAV，则转换格式
-            if output_path.suffix.lower() != '.wav':
-                audio_segment = AudioSegment.from_wav(tmp_path)
+            # 确保音频数据在有效范围内
+            audio = np.clip(audio, -1.0, 1.0)
 
-                if output_path.suffix.lower() == '.mp3':
-                    audio_segment.export(str(output_path), format="mp3")
-                elif output_path.suffix.lower() == '.flac':
-                    audio_segment.export(str(output_path), format="flac")
-                elif output_path.suffix.lower() == '.ogg':
-                    audio_segment.export(str(output_path), format="ogg")
-                elif output_path.suffix.lower() == '.m4a':
-                    audio_segment.export(str(output_path), format="mp4")
-                else:
-                    # 默认保存为WAV
-                    os.rename(tmp_path, str(output_path))
-                    return
-            else:
-                os.rename(tmp_path, str(output_path))
+            # 直接使用soundfile保存，支持多种格式且无需外部依赖
+            sf.write(str(output_path), audio, sample_rate)
 
-        finally:
-            # 清理临时文件
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+        except Exception as e:
+            console.print(f"[red]保存音频文件失败: {str(e)}[/red]")
+            raise
 
     def batch_embed(
         self,
@@ -398,11 +430,11 @@ class AudioWatermark:
         watermark: str,
         method: Literal["dct", "dwt", "spectrogram"] = "dct",
         alpha: float = 0.1,
-        password: int = 42
+        password: int = 42,
     ) -> int:
         """
         批量嵌入音频水印
-        
+
         Returns:
             int: 成功处理的文件数量
         """
