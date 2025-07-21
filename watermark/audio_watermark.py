@@ -1,8 +1,3 @@
-"""
-音频数字水印模块
-基于DCT和DWT频域变换实现音频水印
-"""
-
 from pathlib import Path
 from typing import Literal
 
