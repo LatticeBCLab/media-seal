@@ -78,25 +78,11 @@ def audio_embed(
     input_path: Annotated[Path, typer.Argument(help="输入音频路径")],
     output_path: Annotated[Path, typer.Argument(help="输出音频路径")],
     watermark: Annotated[str, typer.Argument(help="水印内容")],
-    method: str = typer.Option(
-        "dct", "--method", "-m", help="水印算法: dct, dwt, spectrogram"
-    ),
-    alpha: float = typer.Option(0.1, "--alpha", "-a", help="水印强度 (0.01-1.0)"),
-    password: int = typer.Option(42, "--password", "-p", help="密码种子"),
+    method: str = typer.Option("dct", "--method", "-m", help="水印算法: dct, dwt"),
 ):
     """嵌入音频水印"""
-    if not (0.01 <= alpha <= 1.0):
-        console.print("[red]错误：水印强度应在 0.01-1.0 范围内[/red]")
-        raise typer.Exit(1)
-
-    if method not in ["dct", "dwt", "spectrogram"]:
-        console.print(f"[red]错误：不支持的方法: {method}[/red]")
-        raise typer.Exit(1)
-
     watermarker = AudioWatermark()
-    success = watermarker.embed(
-        input_path, output_path, watermark, method, alpha, password
-    )
+    success = watermarker.embed(input_path, output_path, watermark, method)
     if not success:
         raise typer.Exit(1)
 
@@ -104,17 +90,12 @@ def audio_embed(
 @audio_app.command("extract")
 def audio_extract(
     input_path: Annotated[Path, typer.Argument(help="输入音频路径")],
-    method: str = typer.Option(
-        "dct", "--method", "-m", help="水印算法: dct, dwt, spectrogram"
-    ),
-    watermark_length: int = typer.Option(
-        32, "--length", "-l", help="水印长度（字符数）"
-    ),
-    password: int = typer.Option(42, "--password", "-p", help="密码种子"),
+    watermark_length: Annotated[int, typer.Argument(help="提取水印长度（字符数）")],
+    method: str = typer.Option("dct", "--method", "-m", help="水印算法: dct, dwt"),
 ):
     """提取音频水印"""
     watermarker = AudioWatermark()
-    result = watermarker.extract(input_path, method, watermark_length, password)
+    result = watermarker.extract(input_path, watermark_length, method)
     if result is None:
         raise typer.Exit(1)
 
@@ -124,9 +105,7 @@ def audio_batch_embed(
     input_dir: Annotated[Path, typer.Argument(help="输入目录")],
     output_dir: Annotated[Path, typer.Argument(help="输出目录")],
     watermark: Annotated[str, typer.Argument(help="水印内容")],
-    method: str = typer.Option(
-        "dct", "--method", "-m", help="水印算法: dct, dwt, spectrogram"
-    ),
+    method: str = typer.Option("dct", "--method", "-m", help="水印算法: dct, dwt"),
     alpha: float = typer.Option(0.1, "--alpha", "-a", help="水印强度"),
     password: int = typer.Option(42, "--password", "-p", help="密码种子"),
 ):
@@ -316,9 +295,8 @@ def help_algorithms():
     audio_table.add_column("特点", style="green")
     audio_table.add_column("鲁棒性", style="yellow")
 
-    audio_table.add_row("dct", "DCT域扩频水印", "中等")
-    audio_table.add_row("dwt", "小波域水印", "高")
-    audio_table.add_row("spectrogram", "频谱图域水印", "中等")
+    audio_table.add_row("dct", "DCT域量化调制水印", "中等")
+    audio_table.add_row("dwt", "小波域系数修改水印", "高")
 
     console.print(audio_table)
 
