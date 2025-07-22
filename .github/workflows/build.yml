@@ -3,26 +3,34 @@ name: Build and Release
 on:
   push:
     tags: ['v*']
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: ['main']
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             platform: linux
+            executable: media-seal
+            archive_cmd: "tar -czf"
+            archive_ext: "tar.gz"
           - os: windows-latest
             platform: windows
+            executable: media-seal.exe
+            archive_cmd: "7z a"
+            archive_ext: "zip"
           - os: macos-latest
             platform: macos
+            executable: media-seal
+            archive_cmd: "tar -czf"
+            archive_ext: "tar.gz"
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -53,33 +61,24 @@ jobs:
     - name: Create archive
       run: |
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          7z a media-seal-${{ matrix.platform }}.zip ./dist/media-seal.exe
+          7z a media-seal-${{ matrix.platform }}.${{ matrix.archive_ext }} ./dist/${{ matrix.executable }}
         else
-          tar -czf media-seal-${{ matrix.platform }}.tar.gz -C dist media-seal
+          tar -czf media-seal-${{ matrix.platform }}.${{ matrix.archive_ext }} -C dist ${{ matrix.executable }}
         fi
       shell: bash
     
-    - name: Upload artifacts
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: media-seal-${{ matrix.platform }}
-        path: media-seal-${{ matrix.platform }}.*
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+        path: media-seal-${{ matrix.platform }}.${{ matrix.archive_ext }}
+        retention-days: 30
     
-    steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-    
-    - name: Create Release
+    - name: Upload to Release (only on tag push)
+      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: artifacts/**/*
+        files: media-seal-${{ matrix.platform }}.${{ matrix.archive_ext }}
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
