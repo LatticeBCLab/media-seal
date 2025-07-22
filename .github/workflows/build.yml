@@ -45,7 +45,12 @@ jobs:
       run: |
         uv sync || python setup.py
         uv add pyinstaller --dev || pip install pyinstaller
-        pyinstaller --clean --noconfirm build.spec
+        if command -v uv >/dev/null 2>&1 && [ -f "pyproject.toml" ]; then
+          uv run pyinstaller --clean --noconfirm build.spec
+        else
+          source .venv/bin/activate 2>/dev/null || true
+          pyinstaller --clean --noconfirm build.spec
+        fi
       shell: bash
     
     - name: Create archive
