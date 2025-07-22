@@ -1,204 +1,75 @@
 name: Build and Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      run_tests:
-        description: 'Run tests before building'
-        required: false
-        default: true
-        type: boolean
-      build_platforms:
-        description: 'Build platforms (comma-separated: linux,windows,macos)'
-        required: false
-        default: 'linux,windows,macos'
-        type: string
-      create_release:
-        description: 'Create a GitHub release (requires tag or manual trigger)'
-        required: false
-        default: false
-        type: boolean
-  
   push:
-    tags: [ 'v*' ]
+    tags: ['v*']
+  workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' && inputs.run_tests == 'true') || startsWith(github.ref, 'refs/tags/')
-    strategy:
-      matrix:
-        python-version: ["3.11"]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        version: "latest"
-    
-    - name: Cache uv dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/uv
-          .venv
-        key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libsndfile1 ffmpeg portaudio19-dev
-    
-    - name: Install Python dependencies with uv
-      run: |
-        # 尝试使用uv安装
-        if ! uv sync; then
-          echo "uv sync failed, trying alternative approach..."
-          # 回退到pip安装兼容版本
-          python setup.py
-        fi
-    
-    - name: Run basic tests
-      run: |
-        python test_basic.py
-        python main.py version || echo "Version command failed but continuing..."
-
   build:
-    needs: test
     runs-on: ${{ matrix.os }}
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             platform: linux
-            arch: x64
-            enabled: ${{ contains(inputs.build_platforms, 'linux') || startsWith(github.ref, 'refs/tags/') }}
           - os: windows-latest
             platform: windows
-            arch: x64
-            enabled: ${{ contains(inputs.build_platforms, 'windows') || startsWith(github.ref, 'refs/tags/') }}
           - os: macos-latest
             platform: macos
-            arch: x64
-            enabled: ${{ contains(inputs.build_platforms, 'macos') || startsWith(github.ref, 'refs/tags/') }}
-          - os: macos-latest
-            platform: macos
-            arch: arm64
-            enabled: ${{ contains(inputs.build_platforms, 'macos') || startsWith(github.ref, 'refs/tags/') }}
-        exclude:
-          - enabled: false
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: "3.11"
     
     - name: Install uv
       uses: astral-sh/setup-uv@v3
-      with:
-        version: "latest"
-    
-    - name: Cache uv dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/uv
-          ~/AppData/Local/uv/cache
-          ~/Library/Caches/uv
-          .venv
-        key: ${{ runner.os }}-uv-build-${{ hashFiles('pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-build-
     
     - name: Install system dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libsndfile1 ffmpeg portaudio19-dev
+      run: sudo apt-get update && sudo apt-get install -y libsndfile1 ffmpeg portaudio19-dev
     
     - name: Install system dependencies (macOS)
       if: matrix.os == 'macos-latest'
-      run: |
-        brew update
-        brew install ffmpeg portaudio
+      run: brew install ffmpeg portaudio
     
     - name: Install system dependencies (Windows)
       if: matrix.os == 'windows-latest'
-      run: |
-        # Windows下通过conda安装ffmpeg
-        choco install ffmpeg
+      run: choco install ffmpeg
     
-    - name: Install Python dependencies
+    - name: Install dependencies and build
       run: |
-        # 尝试使用uv安装，失败则回退到pip
-        if ! uv sync; then
-          echo "uv sync failed, using fallback installation..."
-          python setup.py
-        fi
-    
-    - name: Install PyInstaller
-      run: |
+        uv sync || python setup.py
         uv add pyinstaller --dev || pip install pyinstaller
-    
-    - name: Build executable
-      run: |
-        # 激活虚拟环境（如果存在）
-        if [ -d ".venv" ]; then
-          source .venv/bin/activate || .venv\Scripts\activate
-        fi
         pyinstaller --clean --noconfirm build.spec
-      shell: bash
-      env:
-        PYTHONOPTIMIZE: 1
-    
-    - name: Test executable
-      run: |
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          ./dist/media-seal.exe version || echo "Executable test failed"
-        else
-          ./dist/media-seal version || echo "Executable test failed"
-        fi
       shell: bash
     
     - name: Create archive
       run: |
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          7z a media-seal-${{ matrix.platform }}-${{ matrix.arch }}.zip ./dist/media-seal.exe
+          7z a media-seal-${{ matrix.platform }}.zip ./dist/media-seal.exe
         else
-          tar -czf media-seal-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C dist media-seal
+          tar -czf media-seal-${{ matrix.platform }}.tar.gz -C dist media-seal
         fi
       shell: bash
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: media-seal-${{ matrix.platform }}-${{ matrix.arch }}
-        path: |
-          media-seal-${{ matrix.platform }}-${{ matrix.arch }}.*
-        retention-days: 30
+        name: media-seal-${{ matrix.platform }}
+        path: media-seal-${{ matrix.platform }}.*
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release == 'true')
+    if: startsWith(github.ref, 'refs/tags/')
     
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Download all artifacts
+    - name: Download artifacts
       uses: actions/download-artifact@v3
       with:
         path: artifacts
@@ -206,10 +77,7 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          artifacts/**/*
+        files: artifacts/**/*
         generate_release_notes: true
-        draft: false
-        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
