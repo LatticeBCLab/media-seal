@@ -13,7 +13,7 @@ console = Console()
 
 
 class AudioWatermark:
-    """音频数字水印处理类 - 使用LSB方法"""
+    """音频数字水印处理类 - 基于频域变换的符号编码水印算法"""
 
     def __init__(self):
         self.supported_formats = [".wav", ".flac", ".ogg", ".mp3", ".m4a", ".aac"]
@@ -78,13 +78,13 @@ class AudioWatermark:
         method: Literal["dct", "dwt"] = "dwt",
     ) -> bool:
         """
-        嵌入音频水印
+        嵌入音频水印 - 使用频域变换的符号编码方法
 
         Args:
             input_path: 输入音频路径
             output_path: 输出音频路径
             watermark: 水印内容（字符串）
-            method: 水印算法 (dct, dwt)
+            method: 水印算法 (dct: 离散余弦变换, dwt: 离散小波变换)
 
         Returns:
             bool: 是否成功
@@ -134,12 +134,12 @@ class AudioWatermark:
         method: Literal["dct", "dwt"] = "dwt",
     ) -> str | None:
         """
-        提取音频水印
+        提取音频水印 - 基于频域变换的符号解码方法
 
         Args:
             input_path: 输入音频路径
             watermark_length: 水印长度（字符数）
-            method: 水印算法
+            method: 水印算法 (dct: 离散余弦变换, dwt: 离散小波变换)
 
         Returns:
             str: 提取的水印内容
@@ -179,15 +179,22 @@ class AudioWatermark:
         return watermark
 
     def _embed_watermark_dwt(self, samples: np.ndarray, watermark: str) -> np.ndarray:
-        """使用DWT域嵌入水印 - 基于符号的稳定方法"""
-        console.print(f"[blue]DWT嵌入水印: '{watermark}'[/blue]")
+        """
+        使用离散小波变换(DWT)域嵌入水印
 
+        算法原理：
+        1. 对音频信号进行Haar小波2级分解，得到低频近似系数ca2
+        2. 将水印文本转换为二进制位序列
+        3. 通过修改ca2系数的符号来编码水印：正值表示'1'，负值表示'0'
+        4. 重构信号获得含水印的音频
+
+        优势：频域嵌入具有较好的抗压缩性和隐蔽性
+        """
+        console.print(f"[blue]DWT嵌入水印: '{watermark}'[/blue]")
         watermark_bits = self._text_to_bits(watermark)
 
-        # 使用haar小波进行2级分解
         coeffs = pywt.wavedec(samples, "haar", level=2)
         ca2, cd2, cd1 = coeffs
-
         console.print(
             f"[blue]小波分解完成，ca2长度={len(ca2)}, 水印长度={len(watermark_bits)}位[/blue]"
         )
@@ -231,14 +238,20 @@ class AudioWatermark:
         return watermarked_samples.astype(np.float32)
 
     def _extract_watermark_dwt(self, samples: np.ndarray, length: int) -> str:
-        """从DWT域提取水印 - 基于符号解码的稳定方法"""
+        """
+        从离散小波变换(DWT)域提取水印
+
+        算法原理：
+        1. 对含水印音频进行相同的Haar小波2级分解
+        2. 提取低频近似系数ca2
+        3. 根据系数符号解码水印：正值解码为'1'，负值解码为'0'
+        4. 将二进制位序列转换回文本
+        """
         console.print(
             f"[blue]DWT提取水印，期望长度: {length}字符({length * 8}位)[/blue]"
         )
-
         total_bits = length * 8
 
-        # 使用相同的小波进行分解
         coeffs = pywt.wavedec(samples, "haar", level=2)
         ca2, _, _ = coeffs
 
@@ -267,7 +280,17 @@ class AudioWatermark:
             return bits_str
 
     def _embed_watermark_dct(self, samples: np.ndarray, watermark: str) -> np.ndarray:
-        """使用DCT域嵌入水印 - 基于符号的稳定方法"""
+        """
+        使用离散余弦变换(DCT)域嵌入水印
+
+        算法原理：
+        1. 对音频信号进行DCT变换，得到频域系数
+        2. 将水印文本转换为二进制位序列
+        3. 通过修改DCT系数的符号来编码水印：正值表示'1'，负值表示'0'
+        4. 进行逆DCT变换重构含水印的音频信号
+
+        优势：DCT域嵌入对音频质量影响小，水印提取稳定
+        """
         console.print(f"[blue]DCT嵌入水印: '{watermark}'[/blue]")
 
         watermark_bits = self._text_to_bits(watermark)
@@ -313,7 +336,15 @@ class AudioWatermark:
         return watermarked_samples.astype(np.float32)
 
     def _extract_watermark_dct(self, samples: np.ndarray, length: int) -> str:
-        """从DCT域提取水印 - 基于符号解码的稳定方法"""
+        """
+        从离散余弦变换(DCT)域提取水印
+
+        算法原理：
+        1. 对含水印音频进行DCT变换
+        2. 提取DCT系数
+        3. 根据系数符号解码水印：正值解码为'1'，负值解码为'0'
+        4. 将二进制位序列转换回文本
+        """
         console.print(
             f"[blue]DCT提取水印，期望长度: {length}字符({length * 8}位)[/blue]"
         )

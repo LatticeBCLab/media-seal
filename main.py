@@ -106,14 +106,10 @@ def audio_batch_embed(
     output_dir: Annotated[Path, typer.Argument(help="输出目录")],
     watermark: Annotated[str, typer.Argument(help="水印内容")],
     method: str = typer.Option("dct", "--method", "-m", help="水印算法: dct, dwt"),
-    alpha: float = typer.Option(0.1, "--alpha", "-a", help="水印强度"),
-    password: int = typer.Option(42, "--password", "-p", help="密码种子"),
 ):
     """批量嵌入音频水印"""
     watermarker = AudioWatermark()
-    success_count = watermarker.batch_embed(
-        input_dir, output_dir, watermark, method, alpha, password
-    )
+    success_count = watermarker.batch_embed(input_dir, output_dir, watermark, method)
     if success_count == 0:
         raise typer.Exit(1)
 
@@ -127,8 +123,6 @@ def video_embed(
     method: str = typer.Option(
         "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     frame_interval: int = typer.Option(
         1, "--frame-interval", help="帧间隔（每隔多少帧嵌入一次）"
     ),
@@ -143,8 +137,6 @@ def video_embed(
         output_path,
         watermark,
         method,
-        password_img,
-        password_wm,
         frame_interval,
         max_frames,
     )
@@ -155,41 +147,21 @@ def video_embed(
 @video_app.command("extract")
 def video_extract(
     input_path: Annotated[Path, typer.Argument(help="输入视频路径")],
+    extract_length: Annotated[int, typer.Argument(help="提取水印长度（字节数）")],
     method: str = typer.Option(
         "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     frame_interval: int = typer.Option(1, "--frame-interval", help="帧间隔"),
     sample_frames: int = typer.Option(10, "--sample-frames", help="采样帧数"),
-    wm_shape: str | None = typer.Option(
-        None, "--wm-shape", help="水印形状（如：128,128）"
-    ),
-    output_wm_dir: Annotated[
-        Path | None, typer.Option("--output-wm-dir", help="输出水印目录")
-    ] = None,
 ):
     """提取视频水印"""
     watermarker = VideoWatermark()
-
-    # 解析水印形状
-    wm_shape_tuple = None
-    if wm_shape:
-        try:
-            wm_shape_tuple = tuple(map(int, wm_shape.split(",")))
-        except ValueError:
-            console.print("[red]错误：水印形状格式错误，应为 '宽,高' 格式[/red]")
-            raise typer.Exit(1) from None
-
     result = watermarker.extract(
         input_path,
+        extract_length,
         method,
-        password_img,
-        password_wm,
         frame_interval,
         sample_frames,
-        wm_shape_tuple,
-        output_wm_dir,
     )
     if result is None:
         raise typer.Exit(1)
@@ -241,8 +213,6 @@ def video_batch_embed(
     method: str = typer.Option(
         "dwtDct", "--method", "-m", help="水印算法: dwtDct, dwtDctSvd"
     ),
-    password_img: int = typer.Option(1, "--password-img", help="图片密码"),
-    password_wm: int = typer.Option(1, "--password-wm", help="水印密码"),
     frame_interval: int = typer.Option(1, "--frame-interval", help="帧间隔"),
 ):
     """批量嵌入视频水印"""
@@ -252,8 +222,6 @@ def video_batch_embed(
         output_dir,
         watermark,
         method,
-        password_img,
-        password_wm,
         frame_interval,
     )
     if success_count == 0:
@@ -299,6 +267,18 @@ def help_algorithms():
     audio_table.add_row("dwt", "小波域系数修改水印", "高")
 
     console.print(audio_table)
+
+    # 视频水印算法
+    video_table = Table(title="视频水印算法")
+    video_table.add_column("算法", style="cyan")
+    video_table.add_column("特点", style="green")
+    video_table.add_column("鲁棒性", style="yellow")
+    video_table.add_column("速度", style="magenta")
+
+    video_table.add_row("dwtDct", "基于帧的DWT+DCT域水印", "中等", "快")
+    video_table.add_row("dwtDctSvd", "基于帧的DWT+DCT+SVD域水印", "高", "中等")
+
+    console.print(video_table)
 
 
 if __name__ == "__main__":

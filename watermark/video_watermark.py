@@ -1,8 +1,3 @@
-"""
-视频数字水印模块
-基于逐帧图像水印处理实现视频水印
-"""
-
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -22,16 +17,169 @@ class VideoWatermark:
 
     def __init__(self):
         self.supported_formats = [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv"]
+        self.supported_methods = ["dwtDct", "dwtDctSvd"]
         self.image_watermark = ImageWatermark()
 
-    def embed(  # noqa: C901
+    def _validate_input_path(self, input_path: Path) -> bool:
+        """验证输入文件路径"""
+        if not input_path.exists():
+            console.print(f"[red]错误：输入文件不存在: {input_path}[/red]")
+            return False
+
+        if input_path.suffix.lower() not in self.supported_formats:
+            console.print(f"[red]错误：不支持的视频格式: {input_path.suffix}[/red]")
+            return False
+
+        return True
+
+    def _validate_method(self, method: str) -> bool:
+        """验证水印方法"""
+        if method not in self.supported_methods:
+            console.print(f"[red]错误：不支持的水印方法: {method}[/red]")
+            return False
+        return True
+
+    def _validate_embed_params(
+        self,
+        input_path: Path,
+        watermark: str,
+        method: str,
+        frame_interval: int,
+    ) -> bool:
+        """验证嵌入参数"""
+        if not self._validate_input_path(input_path):
+            return False
+        if not self._validate_method(method):
+            return False
+        if not watermark.strip():
+            console.print("[red]错误：水印内容不能为空[/red]")
+            return False
+        if frame_interval < 1:
+            console.print("[red]错误：帧间隔必须大于0[/red]")
+            return False
+        return True
+
+    def _validate_extract_params(
+        self,
+        input_path: Path,
+        extract_length: int,
+        method: str,
+        frame_interval: int,
+        sample_frames: int,
+    ) -> bool:
+        """验证提取参数"""
+        if not self._validate_input_path(input_path):
+            return False
+        if not self._validate_method(method):
+            return False
+        if extract_length < 1:
+            console.print("[red]错误：提取长度必须大于0[/red]")
+            return False
+        if frame_interval < 1:
+            console.print("[red]错误：帧间隔必须大于0[/red]")
+            return False
+        if sample_frames < 1:
+            console.print("[red]错误：采样帧数必须大于0[/red]")
+            return False
+        return True
+
+    def _initialize_video_reader(self, input_path: Path):
+        """初始化视频读取器"""
+        try:
+            reader = imageio.get_reader(str(input_path))
+            meta = reader.get_meta_data()
+            fps = meta.get("fps", 30)
+
+            first_frame = reader.get_data(0)
+            height, width = first_frame.shape[:2]
+
+            try:
+                total_frames = reader.count_frames()
+            except (RuntimeError, OSError, AttributeError):
+                duration = meta.get("duration", 10)
+                total_frames = int(duration * fps)
+
+            return reader, fps, width, height, total_frames
+
+        except Exception as e:
+            console.print(f"[red]错误：无法读取视频文件: {str(e)}[/red]")
+            return None, None, None, None, None
+
+    def _create_video_writer(self, temp_video_path: Path, fps: float):
+        """创建视频写入器"""
+        try:
+            writer = imageio.get_writer(
+                str(temp_video_path),
+                fps=fps,
+                codec="libx264",
+                quality=8,
+                macro_block_size=1,
+            )
+            return writer
+        except Exception as e:
+            console.print(f"[red]错误：无法创建输出视频写入器: {str(e)}[/red]")
+            return None
+
+    def _process_video_frames(
+        self,
+        reader,
+        writer,
+        temp_dir: Path,
+        watermark: str,
+        method: str,
+        frame_interval: int,
+        total_frames: int,
+    ) -> tuple[int, int]:
+        """处理视频帧并嵌入水印"""
+        frame_count = 0
+        watermarked_count = 0
+
+        for frame_idx in track(range(total_frames), description="处理帧"):
+            try:
+                frame = reader.get_data(frame_idx)
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            except Exception as e:
+                console.print(
+                    f"[yellow]警告：无法读取第{frame_idx}帧: {str(e)}[/yellow]"
+                )
+                break
+
+            if frame_idx % frame_interval == 0:
+                temp_frame_path = temp_dir / f"frame_{frame_idx}.png"
+                temp_watermarked_path = temp_dir / f"watermarked_{frame_idx}.png"
+
+                cv2.imwrite(str(temp_frame_path), frame_bgr)
+
+                if self.image_watermark.embed(
+                    temp_frame_path, temp_watermarked_path, watermark, method
+                ):
+                    watermarked_frame = cv2.imread(str(temp_watermarked_path))
+                    if watermarked_frame is not None:
+                        watermarked_frame_rgb = cv2.cvtColor(
+                            watermarked_frame, cv2.COLOR_BGR2RGB
+                        )
+                        writer.append_data(watermarked_frame_rgb)
+                        watermarked_count += 1
+                    else:
+                        writer.append_data(frame)
+                else:
+                    writer.append_data(frame)
+
+                temp_frame_path.unlink(missing_ok=True)
+                temp_watermarked_path.unlink(missing_ok=True)
+            else:
+                writer.append_data(frame)
+
+            frame_count += 1
+
+        return frame_count, watermarked_count
+
+    def embed(
         self,
         input_path: str | Path,
         output_path: str | Path,
         watermark: str,
         method: Literal["dwtDct", "dwtDctSvd"] = "dwtDct",
-        password_img: int = 1,
-        password_wm: int = 1,
         frame_interval: int = 1,
         max_frames: int | None = None,
     ) -> bool:
@@ -43,8 +191,6 @@ class VideoWatermark:
             output_path: 输出视频路径
             watermark: 水印内容
             method: 水印算法
-            password_img: 图片密码（用于blind方法）
-            password_wm: 水印密码（用于blind方法）
             frame_interval: 帧间隔（每隔多少帧嵌入一次水印）
             max_frames: 最大处理帧数（用于测试）
 
@@ -55,168 +201,201 @@ class VideoWatermark:
             input_path = Path(input_path)
             output_path = Path(output_path)
 
-            if not input_path.exists():
-                console.print(f"[red]错误：输入文件不存在: {input_path}[/red]")
+            if not self._validate_embed_params(
+                input_path, watermark, method, frame_interval
+            ):
                 return False
 
-            if input_path.suffix.lower() not in self.supported_formats:
-                console.print(f"[red]错误：不支持的视频格式: {input_path.suffix}[/red]")
-                return False
-
-            # 创建输出目录
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # 使用临时目录处理
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_dir = Path(temp_dir)
+            return self._embed_watermark(
+                input_path, output_path, watermark, method, frame_interval, max_frames
+            )
 
-                # 读取视频 - 使用imageio替代moviepy
-                try:
-                    reader = imageio.get_reader(str(input_path))
-                    meta = reader.get_meta_data()
-                    fps = meta.get("fps", 30)
+        except Exception as e:
+            console.print(f"[red]嵌入视频水印时发生错误: {str(e)}[/red]")
+            return False
 
-                    # 获取第一帧来确定视频尺寸
-                    first_frame = reader.get_data(0)
-                    height, width = first_frame.shape[:2]
+    def _embed_watermark(
+        self,
+        input_path: Path,
+        output_path: Path,
+        watermark: str,
+        method: str,
+        frame_interval: int,
+        max_frames: int | None,
+    ) -> bool:
+        """执行水印嵌入的核心逻辑"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir = Path(temp_dir)
 
-                    # 估算总帧数
-                    try:
-                        total_frames = reader.count_frames()
-                    except (RuntimeError, OSError, AttributeError):
-                        duration = meta.get("duration", 10)
-                        total_frames = int(duration * fps)
+            reader, fps, width, height, total_frames = self._initialize_video_reader(
+                input_path
+            )
+            if reader is None:
+                return False
 
-                except Exception as e:
-                    console.print(f"[red]错误：无法读取视频文件: {str(e)}[/red]")
-                    return False
+            if max_frames:
+                total_frames = min(total_frames, max_frames)
 
-                if max_frames:
-                    total_frames = min(total_frames, max_frames)
+            console.print(f"视频信息：{width}x{height}, {fps}FPS, {total_frames}帧")
 
-                console.print(f"视频信息：{width}x{height}, {fps}FPS, {total_frames}帧")
+            temp_video_path = temp_dir / "temp_video.mp4"
+            writer = self._create_video_writer(temp_video_path, fps)
+            if writer is None:
+                reader.close()
+                return False
 
-                # 创建输出视频写入器 - 使用imageio
-                temp_video_path = temp_dir / "temp_video.mp4"
-
-                try:
-                    writer = imageio.get_writer(
-                        str(temp_video_path), fps=fps, codec="libx264", quality=8
-                    )
-                except Exception as e:
-                    console.print(f"[red]错误：无法创建输出视频写入器: {str(e)}[/red]")
-                    reader.close()
-                    return False
-
-                frame_count = 0
-                watermarked_count = 0
-
-                # 逐帧处理
+            try:
                 with console.status("[bold green]处理视频帧..."):
-                    try:
-                        for frame_idx in track(
-                            range(total_frames), description="处理帧"
-                        ):
-                            try:
-                                frame = reader.get_data(frame_idx)
-                                # 转换为BGR格式（opencv格式）
-                                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                            except Exception as e:
-                                console.print(
-                                    f"[yellow]警告：无法读取第{frame_idx}帧: {str(e)}[/yellow]"
-                                )
-                                break
+                    frame_count, watermarked_count = self._process_video_frames(
+                        reader,
+                        writer,
+                        temp_dir,
+                        watermark,
+                        method,
+                        frame_interval,
+                        total_frames,
+                    )
+            finally:
+                reader.close()
+                writer.close()
 
-                            # 根据帧间隔决定是否嵌入水印
-                            if frame_idx % frame_interval == 0:
-                                # 保存当前帧到临时文件
-                                temp_frame_path = temp_dir / f"frame_{frame_idx}.png"
-                                temp_watermarked_path = (
-                                    temp_dir / f"watermarked_{frame_idx}.png"
-                                )
-
-                                cv2.imwrite(str(temp_frame_path), frame_bgr)
-
-                                # 嵌入水印
-                                if self.image_watermark.embed(
-                                    temp_frame_path,
-                                    temp_watermarked_path,
-                                    watermark,
-                                    method,
-                                    password_img=password_img,
-                                    password_wm=password_wm,
-                                ):
-                                    # 读取水印帧
-                                    watermarked_frame = cv2.imread(
-                                        str(temp_watermarked_path)
-                                    )
-                                    if watermarked_frame is not None:
-                                        # 转换回RGB格式
-                                        watermarked_frame_rgb = cv2.cvtColor(
-                                            watermarked_frame, cv2.COLOR_BGR2RGB
-                                        )
-                                        writer.append_data(watermarked_frame_rgb)
-                                        watermarked_count += 1
-                                    else:
-                                        writer.append_data(frame)
-                                else:
-                                    writer.append_data(frame)
-
-                                # 清理临时文件
-                                if temp_frame_path.exists():
-                                    temp_frame_path.unlink()
-                                if temp_watermarked_path.exists():
-                                    temp_watermarked_path.unlink()
-                            else:
-                                writer.append_data(frame)
-
-                            frame_count += 1
-
-                    finally:
-                        reader.close()
-                        writer.close()
-
-                # 移动临时视频到最终位置
-                if temp_video_path.exists():
-                    import shutil
-
-                    shutil.move(str(temp_video_path), str(output_path))
+            if temp_video_path.exists():
+                success = self._merge_audio_video(
+                    input_path, temp_video_path, output_path
+                )
+                if success:
                     console.print(f"[green]成功嵌入视频水印到: {output_path}[/green]")
                     console.print(
                         f"[blue]处理了 {frame_count} 帧，其中 {watermarked_count} 帧嵌入了水印[/blue]"
                     )
                     return True
                 else:
-                    console.print("[red]错误：临时视频文件未生成[/red]")
+                    console.print("[red]错误：音频合并失败[/red]")
                     return False
+            else:
+                console.print("[red]错误：临时视频文件未生成[/red]")
+                return False
+
+    def _merge_audio_video(
+        self, original_video: Path, watermarked_video: Path, output_path: Path
+    ) -> bool:
+        """合并原视频的音频和水印视频"""
+        try:
+            # 方案1：使用imageio内置的ffmpeg
+            try:
+                import subprocess
+
+                import imageio_ffmpeg as ffmpeg
+
+                ffmpeg_path = ffmpeg.get_ffmpeg_exe()
+
+                # 使用ffmpeg合并音视频
+                cmd = [
+                    ffmpeg_path,
+                    "-i",
+                    str(watermarked_video),  # 水印视频（无音频）
+                    "-i",
+                    str(original_video),  # 原视频（有音频）
+                    "-c:v",
+                    "copy",  # 复制视频流
+                    "-c:a",
+                    "aac",  # 音频编码为aac
+                    "-map",
+                    "0:v:0",  # 使用第一个输入的视频
+                    "-map",
+                    "1:a:0",  # 使用第二个输入的音频
+                    "-shortest",  # 以最短流为准
+                    "-y",  # 覆盖输出文件
+                    str(output_path),
+                ]
+
+                result = subprocess.run(cmd, capture_output=True, text=True)
+
+                if result.returncode == 0:
+                    console.print("[green]音频合并成功[/green]")
+                    return True
+                else:
+                    console.print(f"[yellow]ffmpeg合并失败: {result.stderr}[/yellow]")
+
+            except (ImportError, Exception) as e:
+                console.print(f"[yellow]ffmpeg方案失败: {str(e)}[/yellow]")
+
+            # 方案2：降级处理 - 直接复制无音频的视频
+            console.print("[yellow]警告：无法合并音频，输出视频将没有声音[/yellow]")
+            import shutil
+
+            shutil.move(str(watermarked_video), str(output_path))
+            return True
 
         except Exception as e:
-            console.print(f"[red]嵌入视频水印时发生错误: {str(e)}[/red]")
+            console.print(f"[red]音频合并过程发生错误: {str(e)}[/red]")
             return False
+
+    def _extract_frame_watermarks(
+        self, cap, temp_dir: Path, frame_indices: list, extract_length: int, method: str
+    ) -> list[str]:
+        """从指定帧中提取水印"""
+        extracted_watermarks = []
+
+        for frame_idx in track(frame_indices, description="提取帧水印"):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+
+            if not ret:
+                continue
+
+            temp_frame_path = temp_dir / f"extract_frame_{frame_idx}.png"
+            cv2.imwrite(str(temp_frame_path), frame)
+
+            watermark = self.image_watermark.extract(
+                temp_frame_path, extract_length, method
+            )
+
+            if watermark:
+                extracted_watermarks.append(watermark)
+
+            temp_frame_path.unlink(missing_ok=True)
+
+        return extracted_watermarks
+
+    def _calculate_majority_vote(
+        self, extracted_watermarks: list[str]
+    ) -> tuple[str, float]:
+        """使用多数投票确定最终水印"""
+        from collections import Counter
+
+        watermark_counts = Counter(extracted_watermarks)
+        most_common_watermark = watermark_counts.most_common(1)[0][0]
+        confidence = watermark_counts[most_common_watermark] / len(extracted_watermarks)
+
+        console.print(
+            f"[green]水印提取结果: {most_common_watermark} (置信度: {confidence:.2f})[/green]"
+        )
+        console.print(
+            f"[blue]从 {len(extracted_watermarks)} 帧中提取，其中 {watermark_counts[most_common_watermark]} 帧一致[/blue]"
+        )
+
+        return most_common_watermark, confidence
 
     def extract(
         self,
         input_path: str | Path,
+        extract_length: int,
         method: Literal["dwtDct", "dwtDctSvd"] = "dwtDct",
-        password_img: int = 1,
-        password_wm: int = 1,
         frame_interval: int = 1,
         sample_frames: int = 10,
-        wm_shape: tuple | None = None,
-        output_wm_dir: str | Path | None = None,
     ) -> str | None:
         """
         提取视频水印
 
         Args:
             input_path: 输入视频路径
+            extract_length: 提取水印长度（字节数）
             method: 水印算法
-            password_img: 图片密码（用于blind方法）
-            password_wm: 水印密码（用于blind方法）
             frame_interval: 帧间隔
             sample_frames: 采样帧数（用于提取验证）
-            wm_shape: 水印形状（用于blind方法提取图像水印）
-            output_wm_dir: 输出水印目录（用于blind方法提取图像水印）
 
         Returns:
             str: 提取的水印内容（多数投票结果）
@@ -224,93 +403,63 @@ class VideoWatermark:
         try:
             input_path = Path(input_path)
 
-            if not input_path.exists():
-                console.print(f"[red]错误：输入文件不存在: {input_path}[/red]")
+            if not self._validate_extract_params(
+                input_path, extract_length, method, frame_interval, sample_frames
+            ):
                 return None
 
-            # 使用临时目录
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_dir = Path(temp_dir)
+            return self._extract_watermark_from_video(
+                input_path, extract_length, method, frame_interval, sample_frames
+            )
 
-                # 读取视频
-                cap = cv2.VideoCapture(str(input_path))
-                if not cap.isOpened():
-                    console.print(f"[red]错误：无法打开视频文件: {input_path}[/red]")
-                    return None
+        except Exception as e:
+            console.print(f"[red]提取视频水印时发生错误: {str(e)}[/red]")
+            return None
 
+    def _extract_watermark_from_video(
+        self,
+        input_path: Path,
+        extract_length: int,
+        method: str,
+        frame_interval: int,
+        sample_frames: int,
+    ) -> str | None:
+        """从视频中提取水印的核心逻辑"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir = Path(temp_dir)
+
+            cap = cv2.VideoCapture(str(input_path))
+            if not cap.isOpened():
+                console.print(f"[red]错误：无法打开视频文件: {input_path}[/red]")
+                return None
+
+            try:
                 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                # 选择要提取的帧
-                frame_indices = list(range(0, min(total_frames, sample_frames * frame_interval), frame_interval))
-                extracted_watermarks = []
-
+                frame_indices = list(
+                    range(
+                        0,
+                        min(total_frames, sample_frames * frame_interval),
+                        frame_interval,
+                    )
+                )
                 console.print(f"从 {len(frame_indices)} 帧中提取水印...")
 
-                for frame_idx in track(frame_indices, description="提取帧水印"):
-                    # 跳转到指定帧
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                    ret, frame = cap.read()
-
-                    if not ret:
-                        continue
-
-                    # 保存帧到临时文件
-                    temp_frame_path = temp_dir / f"extract_frame_{frame_idx}.png"
-                    cv2.imwrite(str(temp_frame_path), frame)
-
-                    # 提取水印
-                    if output_wm_dir and wm_shape:
-                        # 提取图像水印
-                        output_wm_path = Path(output_wm_dir) / f"watermark_frame_{frame_idx}.png"
-                        watermark = self.image_watermark.extract(
-                            temp_frame_path,
-                            method,
-                            password_img=password_img,
-                            password_wm=password_wm,
-                            wm_shape=wm_shape,
-                            output_wm_path=output_wm_path
-                        )
-                    else:
-                        # 提取文字水印
-                        watermark = self.image_watermark.extract(
-                            temp_frame_path,
-                            method,
-                            password_img=password_img,
-                            password_wm=password_wm
-                        )
-
-                    if watermark:
-                        extracted_watermarks.append(watermark)
-
-                    # 清理临时文件
-                    temp_frame_path.unlink(missing_ok=True)
-
-                cap.release()
+                extracted_watermarks = self._extract_frame_watermarks(
+                    cap, temp_dir, frame_indices, extract_length, method
+                )
 
                 if not extracted_watermarks:
                     console.print("[yellow]警告：未能从任何帧中提取到水印[/yellow]")
                     return None
 
-                # 使用多数投票确定最终水印
-                if output_wm_dir and wm_shape:
-                    # 对于图像水印，返回提取的文件路径
-                    console.print(f"[green]成功从 {len(extracted_watermarks)} 帧中提取图像水印[/green]")
-                    return str(output_wm_dir)
-                else:
-                    # 对于文字水印，使用多数投票
-                    from collections import Counter
-                    watermark_counts = Counter(extracted_watermarks)
-                    most_common_watermark = watermark_counts.most_common(1)[0][0]
-                    confidence = watermark_counts[most_common_watermark] / len(extracted_watermarks)
+                most_common_watermark, _ = self._calculate_majority_vote(
+                    extracted_watermarks
+                )
+                return most_common_watermark
 
-                    console.print(f"[green]水印提取结果: {most_common_watermark} (置信度: {confidence:.2f})[/green]")
-                    console.print(f"[blue]从 {len(extracted_watermarks)} 帧中提取，其中 {watermark_counts[most_common_watermark]} 帧一致[/blue]")
-
-                    return most_common_watermark
-
-        except Exception as e:
-            console.print(f"[red]提取视频水印时发生错误: {str(e)}[/red]")
-            return None
+            finally:
+                cap.release()
 
     def get_video_info(self, video_path: str | Path) -> dict | None:
         """获取视频信息"""
@@ -397,12 +546,17 @@ class VideoWatermark:
         output_dir: str | Path,
         watermark: str,
         method: Literal["dwtDct", "dwtDctSvd"] = "dwtDct",
-        password_img: int = 1,
-        password_wm: int = 1,
         frame_interval: int = 1,
     ) -> int:
         """
         批量嵌入视频水印
+
+        Args:
+            input_dir: 输入目录
+            output_dir: 输出目录
+            watermark: 水印内容
+            method: 水印算法
+            frame_interval: 帧间隔
 
         Returns:
             int: 成功处理的文件数量
@@ -427,7 +581,7 @@ class VideoWatermark:
         success_count = 0
         for video_file in track(video_files, description="批量处理视频..."):
             output_file = output_dir / video_file.name
-            if self.embed(video_file, output_file, watermark, method, password_img, password_wm, frame_interval):
+            if self.embed(video_file, output_file, watermark, method, frame_interval):
                 success_count += 1
 
         console.print(f"[green]批量处理完成：成功处理 {success_count}/{len(video_files)} 个文件[/green]")
