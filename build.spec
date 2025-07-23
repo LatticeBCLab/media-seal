@@ -36,7 +36,6 @@ binaries = []
 
 # 排除不需要的大型模块
 excludes = [
-    'torch',
     'torchvision', 
     'torchaudio',
     'tensorflow',
@@ -62,13 +61,6 @@ excludes = [
     'gi',
     'gtk',
     'qt',
-    'test',
-    'tests',
-    'testing',
-    'unittest',
-    'pytest',
-    'nose',
-    'coverage',
     'sphinx',
     'docs',
     'examples',
