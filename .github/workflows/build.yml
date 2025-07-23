@@ -42,7 +42,9 @@ jobs:
     
     - name: Install system dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get update && sudo apt-get install -y libsndfile1 ffmpeg
+      run: |
+        sudo apt-get update 
+        sudo apt-get install -y libsndfile1 ffmpeg upx-ucl
     
     - name: Install system dependencies (macOS)
       if: matrix.os == 'macos-latest'
@@ -55,7 +57,13 @@ jobs:
     - name: Install dependencies and build
       run: |
         uv sync
-        uv run pyinstaller --clean --noconfirm build.spec
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          echo "🐧 使用Linux优化配置构建..."
+          uv run pyinstaller --clean --noconfirm build-linux.spec
+        else
+          echo "🖥️ 使用标准配置构建..."
+          uv run pyinstaller --clean --noconfirm build.spec
+        fi
       shell: bash
     
     - name: Create archive
