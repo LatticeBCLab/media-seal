@@ -1,3 +1,5 @@
+import functools
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -9,6 +11,36 @@ from rich.table import Table
 from watermark import AudioWatermark, ImageWatermark, VideoWatermark
 
 console = Console()
+
+def timing_decorator(operation_name: str):
+    """时间统计装饰器"""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            console.print(f"[blue]开始{operation_name}...[/blue]")
+
+            try:
+                result = func(*args, **kwargs)
+                end_time = time.time()
+                elapsed = end_time - start_time
+
+                console.print(f"[green]✓ {operation_name}完成[/green]")
+                console.print(f"[yellow]耗时: {elapsed:.2f} 秒[/yellow]")
+                return result
+            except Exception:
+                end_time = time.time()
+                elapsed = end_time - start_time
+                console.print(
+                    f"[red]✗ {operation_name}失败 (耗时: {elapsed:.2f} 秒)[/red]"
+                )
+                raise
+
+        return wrapper
+
+    return decorator
+
 
 app = typer.Typer(
     name="media-seal",
@@ -26,6 +58,7 @@ app.add_typer(video_app)
 
 
 @image_app.command("embed")
+@timing_decorator("图像水印嵌入")
 def image_embed(
     input_path: Annotated[Path, typer.Argument(help="输入图片路径")],
     output_path: Annotated[Path, typer.Argument(help="输出图片路径")],
@@ -42,6 +75,7 @@ def image_embed(
 
 
 @image_app.command("extract")
+@timing_decorator("图像水印提取")
 def image_extract(
     input_path: Annotated[Path, typer.Argument(help="输入图片路径")],
     extract_length: Annotated[int, typer.Argument(help="提取水印长度（字节数）")],
@@ -57,6 +91,7 @@ def image_extract(
 
 
 @image_app.command("batch-embed")
+@timing_decorator("批量图像水印嵌入")
 def image_batch_embed(
     input_dir: Annotated[Path, typer.Argument(help="输入目录")],
     output_dir: Annotated[Path, typer.Argument(help="输出目录")],
@@ -74,6 +109,7 @@ def image_batch_embed(
 
 # 音频水印命令
 @audio_app.command("embed")
+@timing_decorator("音频水印嵌入")
 def audio_embed(
     input_path: Annotated[Path, typer.Argument(help="输入音频路径")],
     output_path: Annotated[Path, typer.Argument(help="输出音频路径")],
@@ -88,6 +124,7 @@ def audio_embed(
 
 
 @audio_app.command("extract")
+@timing_decorator("音频水印提取")
 def audio_extract(
     input_path: Annotated[Path, typer.Argument(help="输入音频路径")],
     watermark_length: Annotated[int, typer.Argument(help="提取水印长度（字符数）")],
@@ -101,6 +138,7 @@ def audio_extract(
 
 
 @audio_app.command("batch-embed")
+@timing_decorator("批量音频水印嵌入")
 def audio_batch_embed(
     input_dir: Annotated[Path, typer.Argument(help="输入目录")],
     output_dir: Annotated[Path, typer.Argument(help="输出目录")],
@@ -116,6 +154,7 @@ def audio_batch_embed(
 
 # 视频水印命令
 @video_app.command("embed")
+@timing_decorator("视频水印嵌入")
 def video_embed(
     input_path: Annotated[Path, typer.Argument(help="输入视频路径")],
     output_path: Annotated[Path, typer.Argument(help="输出视频路径")],
@@ -145,6 +184,7 @@ def video_embed(
 
 
 @video_app.command("extract")
+@timing_decorator("视频水印提取")
 def video_extract(
     input_path: Annotated[Path, typer.Argument(help="输入视频路径")],
     extract_length: Annotated[int, typer.Argument(help="提取水印长度（字节数）")],
@@ -190,6 +230,7 @@ def video_info(video_path: Annotated[Path, typer.Argument(help="视频路径")])
 
 
 @video_app.command("extract-frames")
+@timing_decorator("视频帧提取")
 def video_extract_frames(
     video_path: Annotated[Path, typer.Argument(help="视频路径")],
     output_dir: Annotated[Path, typer.Argument(help="输出目录")],
@@ -206,6 +247,7 @@ def video_extract_frames(
 
 
 @video_app.command("batch-embed")
+@timing_decorator("批量视频水印嵌入")
 def video_batch_embed(
     input_dir: Annotated[Path, typer.Argument(help="输入目录")],
     output_dir: Annotated[Path, typer.Argument(help="输出目录")],
